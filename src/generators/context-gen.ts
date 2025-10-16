@@ -1,9 +1,58 @@
 import { FileContext, ErrorFlow, CoverageReport } from '../types/index.js';
+import { AIContext } from '../analyzers/ai-analyzer.js';
 import chalk from 'chalk';
 import { ui } from '../cli/ui.js';
 
 export class ContextGenerator {
-  generateFileContext(context: FileContext): void {
+  generateFileContext(context: FileContext, aiContext?: AIContext): void {
+    // Show AI context first if available
+    if (aiContext) {
+      this.generateAIContext(aiContext);
+      ui.divider();
+      ui.newline();
+    }
+
+    this.generateRawContext(context);
+  }
+
+  private generateAIContext(aiContext: AIContext): void {
+    ui.header('🤖 AI Context Summary');
+    ui.newline();
+
+    // Summary
+    console.log(chalk.white(aiContext.summary));
+    ui.newline();
+
+    // Purpose
+    ui.section('🎯 Purpose');
+    console.log(chalk.gray(aiContext.purpose));
+    ui.newline();
+
+    // Impact
+    ui.section('📊 Impact');
+    console.log(chalk.gray(aiContext.impact));
+    ui.newline();
+
+    // Warnings
+    if (aiContext.warnings && aiContext.warnings.length > 0) {
+      ui.section('⚠️  Watch Out');
+      aiContext.warnings.forEach(warning => {
+        console.log(chalk.yellow('  •'), warning);
+      });
+      ui.newline();
+    }
+
+    // Related context
+    if (aiContext.relatedContext && aiContext.relatedContext.length > 0) {
+      ui.section('💡 Related Context');
+      aiContext.relatedContext.forEach(ctx => {
+        console.log(chalk.gray('  •'), ctx);
+      });
+      ui.newline();
+    }
+  }
+
+  private generateRawContext(context: FileContext): void {
     ui.header(`🔍 Context for ${context.path}`);
     ui.newline();
 

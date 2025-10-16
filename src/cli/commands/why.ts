@@ -3,7 +3,9 @@ import { GitAnalyzer } from '../../analyzers/git-analyzer.js';
 import { CodeAnalyzer } from '../../analyzers/code-analyzer.js';
 import { ErrorAnalyzer } from '../../analyzers/error-analyzer.js';
 import { GitHubAnalyzer } from '../../analyzers/github-analyzer.js';
+import { AIAnalyzer } from '../../analyzers/ai-analyzer.js';
 import { ContextGenerator } from '../../generators/context-gen.js';
+import { CacheManager } from '../../utils/cache.js';
 import { ui } from '../ui.js';
 import { FileContext } from '../../types/index.js';
 import * as path from 'path';
@@ -17,6 +19,9 @@ export function createWhyCommand(): Command {
     .argument('<target>', 'File path or function name to analyze')
     .option('--no-github', 'Skip GitHub integration')
     .option('--github-token <token>', 'GitHub token (or use GITHUB_TOKEN env var)')
+    .option('--no-ai', 'Skip AI context generation')
+    .option('--anthropic-key <key>', 'Anthropic API key (or use ANTHROPIC_API_KEY env var)')
+    .option('--no-cache', 'Skip cache and regenerate AI context')
     .action(async (target: string, options) => {
       try {
         const cwd = process.cwd();
@@ -110,9 +115,55 @@ export function createWhyCommand(): Command {
           }
         }
 
+        // Generate AI context if enabled
+        let aiContext;
+        if (options.ai !== false) {
+          const anthropicKey = options.anthropicKey || process.env.ANTHROPIC_API_KEY;
+
+          if (!anthropicKey) {
+            ui.warning('Anthropic API key not provided. Skipping AI analysis. Use --anthropic-key or set ANTHROPIC_API_KEY');
+          } else {
+            const cacheManager = new CacheManager();
+            const absolutePath = path.resolve(cwd, filePath);
+
+            // Try to get from cache first
+            if (options.cache !== false) {
+              ui.startSpinner('Checking cache...');
+              aiContext = await cacheManager.get(absolutePath);
+
+              if (aiContext) {
+                ui.succeedSpinner('AI context loaded from cache!');
+              }
+            }
+
+            // Generate AI context if not in cache
+            if (!aiContext) {
+              ui.startSpinner('Generating AI context (this may take a few seconds)...');
+
+              try {
+                const aiAnalyzer = new AIAnalyzer(anthropicKey);
+
+                // Read file content for AI analysis
+                const fileContent = fs.readFileSync(absolutePath, 'utf-8');
+
+                aiContext = await aiAnalyzer.generateContext(context, fileContent);
+
+                // Cache the result
+                if (options.cache !== false) {
+                  await cacheManager.set(absolutePath, aiContext);
+                }
+
+                ui.succeedSpinner('AI context generated!');
+              } catch (error) {
+                ui.failSpinner(`AI analysis failed: ${error}`);
+              }
+            }
+          }
+        }
+
         // Generate output
         const generator = new ContextGenerator();
-        generator.generateFileContext(context);
+        generator.generateFileContext(context, aiContext || undefined);
       } catch (error) {
         ui.failSpinner();
         ui.error(`Error: ${error}`);
