@@ -78,8 +78,11 @@ npm install -g code-context
 ### Basic Commands
 
 ```bash
-# Understand a file (with AI context)
+# Understand a file (with AI context - defaults to Claude)
 code-context why src/auth.ts
+
+# Use OpenAI instead of Anthropic
+code-context why src/auth.ts --ai-provider openai
 
 # Understand a function
 code-context why login()
@@ -89,6 +92,10 @@ code-context why src/auth.ts --no-ai
 
 # Force regenerate AI context (ignore cache)
 code-context why src/auth.ts --no-cache
+
+# Use a specific model
+code-context why src/auth.ts --ai-model gpt-4o
+code-context why src/auth.ts --ai-provider openai --ai-model gpt-4
 
 # Track error flows
 code-context errors LoginError
@@ -100,16 +107,21 @@ code-context coverage
 ### Environment Variables
 
 ```bash
-# Required for AI context
-export ANTHROPIC_API_KEY="sk-ant-..."
+# For AI context (choose one)
+export ANTHROPIC_API_KEY="sk-ant-..."  # For Claude (default)
+export OPENAI_API_KEY="sk-..."         # For GPT
 
-# Required for GitHub integration
+# For GitHub integration
 export GITHUB_TOKEN="ghp_..."
 ```
 
 Or pass as options:
 ```bash
-code-context why src/auth.ts --anthropic-key sk-ant-... --github-token ghp_...
+# With Anthropic/Claude
+code-context why src/auth.ts --anthropic-key sk-ant-...
+
+# With OpenAI/GPT
+code-context why src/auth.ts --ai-provider openai --openai-key sk-...
 ```
 
 ## Requirements
@@ -117,7 +129,9 @@ code-context why src/auth.ts --anthropic-key sk-ant-... --github-token ghp_...
 - Node.js >= 18
 - Git repository
 - TypeScript project (for error analysis)
-- **Anthropic API key** (optional, for AI context - get one at https://console.anthropic.com/)
+- **AI API key** (optional, for AI context):
+  - Anthropic API key - https://console.anthropic.com/ (default, recommended)
+  - OR OpenAI API key - https://platform.openai.com/api-keys
 - GitHub token (optional, for PR/issue context)
 
 ## Development

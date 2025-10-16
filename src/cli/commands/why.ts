@@ -20,7 +20,10 @@ export function createWhyCommand(): Command {
     .option('--no-github', 'Skip GitHub integration')
     .option('--github-token <token>', 'GitHub token (or use GITHUB_TOKEN env var)')
     .option('--no-ai', 'Skip AI context generation')
+    .option('--ai-provider <provider>', 'AI provider: anthropic or openai (default: anthropic)')
     .option('--anthropic-key <key>', 'Anthropic API key (or use ANTHROPIC_API_KEY env var)')
+    .option('--openai-key <key>', 'OpenAI API key (or use OPENAI_API_KEY env var)')
+    .option('--ai-model <model>', 'AI model to use (default: claude-3-5-sonnet or gpt-4o-mini)')
     .option('--no-cache', 'Skip cache and regenerate AI context')
     .action(async (target: string, options) => {
       try {
@@ -118,10 +121,17 @@ export function createWhyCommand(): Command {
         // Generate AI context if enabled
         let aiContext;
         if (options.ai !== false) {
+          // Determine provider and API key
+          const provider = (options.aiProvider || 'anthropic') as 'anthropic' | 'openai';
           const anthropicKey = options.anthropicKey || process.env.ANTHROPIC_API_KEY;
+          const openaiKey = options.openaiKey || process.env.OPENAI_API_KEY;
 
-          if (!anthropicKey) {
-            ui.warning('Anthropic API key not provided. Skipping AI analysis. Use --anthropic-key or set ANTHROPIC_API_KEY');
+          const apiKey = provider === 'anthropic' ? anthropicKey : openaiKey;
+
+          if (!apiKey) {
+            const providerName = provider === 'anthropic' ? 'Anthropic' : 'OpenAI';
+            const envVar = provider === 'anthropic' ? 'ANTHROPIC_API_KEY' : 'OPENAI_API_KEY';
+            ui.warning(`${providerName} API key not provided. Skipping AI analysis. Use --${provider}-key or set ${envVar}`);
           } else {
             const cacheManager = new CacheManager();
             const absolutePath = path.resolve(cwd, filePath);
@@ -138,10 +148,11 @@ export function createWhyCommand(): Command {
 
             // Generate AI context if not in cache
             if (!aiContext) {
-              ui.startSpinner('Generating AI context (this may take a few seconds)...');
+              const providerName = provider === 'anthropic' ? 'Claude' : 'GPT';
+              ui.startSpinner(`Generating AI context with ${providerName} (this may take a few seconds)...`);
 
               try {
-                const aiAnalyzer = new AIAnalyzer(anthropicKey);
+                const aiAnalyzer = new AIAnalyzer(apiKey, provider, options.aiModel);
 
                 // Read file content for AI analysis
                 const fileContent = fs.readFileSync(absolutePath, 'utf-8');

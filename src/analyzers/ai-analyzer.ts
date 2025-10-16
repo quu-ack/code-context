@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { FileContext } from '../types/index.js';
 
 export interface AIContext {
@@ -9,35 +10,65 @@ export interface AIContext {
   relatedContext?: string[];
 }
 
+export type AIProvider = 'anthropic' | 'openai';
+
 export class AIAnalyzer {
-  private client: Anthropic;
+  private anthropicClient?: Anthropic;
+  private openaiClient?: OpenAI;
+  private provider: AIProvider;
   private model: string;
 
-  constructor(apiKey: string, model: string = 'claude-3-5-sonnet-20241022') {
-    this.client = new Anthropic({ apiKey });
-    this.model = model;
+  constructor(apiKey: string, provider: AIProvider = 'anthropic', model?: string) {
+    this.provider = provider;
+
+    if (provider === 'anthropic') {
+      this.anthropicClient = new Anthropic({ apiKey });
+      this.model = model || 'claude-3-5-sonnet-20241022';
+    } else {
+      this.openaiClient = new OpenAI({ apiKey });
+      this.model = model || 'gpt-4o-mini';
+    }
   }
 
   async generateContext(context: FileContext, fileContent?: string): Promise<AIContext> {
     const prompt = this.buildPrompt(context, fileContent);
 
     try {
-      const message = await this.client.messages.create({
-        model: this.model,
-        max_tokens: 1024,
-        messages: [
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-      });
-
-      const response = message.content[0].type === 'text' ? message.content[0].text : '';
-      return this.parseResponse(response);
+      if (this.provider === 'anthropic') {
+        return await this.generateWithAnthropic(prompt);
+      } else {
+        return await this.generateWithOpenAI(prompt);
+      }
     } catch (error) {
       throw new Error(`AI analysis failed: ${error}`);
     }
+  }
+
+  private async generateWithAnthropic(prompt: string): Promise<AIContext> {
+    if (!this.anthropicClient) throw new Error('Anthropic client not initialized');
+
+    const message = await this.anthropicClient.messages.create({
+      model: this.model,
+      max_tokens: 1024,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const response = message.content[0].type === 'text' ? message.content[0].text : '';
+    return this.parseResponse(response);
+  }
+
+  private async generateWithOpenAI(prompt: string): Promise<AIContext> {
+    if (!this.openaiClient) throw new Error('OpenAI client not initialized');
+
+    const completion = await this.openaiClient.chat.completions.create({
+      model: this.model,
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 1024,
+      temperature: 0.3,
+    });
+
+    const response = completion.choices[0]?.message?.content || '';
+    return this.parseResponse(response);
   }
 
   private buildPrompt(context: FileContext, fileContent?: string): string {
@@ -157,13 +188,23 @@ Provide a concise 2-3 sentence explanation focusing on the business/technical re
 `;
 
     try {
-      const message = await this.client.messages.create({
-        model: this.model,
-        max_tokens: 512,
-        messages: [{ role: 'user', content: prompt }],
-      });
-
-      return message.content[0].type === 'text' ? message.content[0].text : 'No explanation available';
+      if (this.provider === 'anthropic' && this.anthropicClient) {
+        const message = await this.anthropicClient.messages.create({
+          model: this.model,
+          max_tokens: 512,
+          messages: [{ role: 'user', content: prompt }],
+        });
+        return message.content[0].type === 'text' ? message.content[0].text : 'No explanation available';
+      } else if (this.provider === 'openai' && this.openaiClient) {
+        const completion = await this.openaiClient.chat.completions.create({
+          model: this.model,
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 512,
+          temperature: 0.3,
+        });
+        return completion.choices[0]?.message?.content || 'No explanation available';
+      }
+      return 'No AI client initialized';
     } catch (error) {
       return `Could not generate explanation: ${error}`;
     }
