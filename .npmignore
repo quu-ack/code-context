@@ -1,0 +1,10 @@
+src/
+tests/
+*.test.ts
+*.spec.ts
+tsconfig.json
+.gitignore
+.prettierrc
+.eslintrc
+node_modules/
+examples/
